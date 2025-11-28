@@ -29,7 +29,7 @@ export interface IStorageService {
     source: Buffer | string,
     filename: string,
     folder: string,
-    mimetype: string,
+    mimetype?: string,
   ): Promise<FileUploadResult>;
 
   /**

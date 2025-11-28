@@ -127,6 +127,12 @@ export class FileController {
     try {
       const storageService = await StorageHelper.getStorageService();
 
+      const existsResult = await storageService.fileExists(filePath);
+      if (!existsResult.exists) {
+        res.status(404).json({ error: 'File not found' });
+        return;
+      }
+
       const result = await storageService.deleteFile(filePath);
 
       if (result.success) {
@@ -176,7 +182,8 @@ export class FileController {
     }
 
     const normalizedPath = PathUtil.normalizePath(filePath);
-    if (!PathUtil.isValidPath(normalizedPath)) {
+
+    if (!normalizedPath || normalizedPath.length === 0) {
       res.status(400).json({ error: 'Invalid file path' });
       return;
     }
@@ -214,28 +221,21 @@ export class FileController {
   /**
    * Получает статус хранилища
    */
-  private static async getStatusInternal(res: Response): Promise<void> {
+  static async getStatus(_req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const storageManager = getStorageManager();
-      const isS3 = storageManager.isUsingS3();
+      const storageType = storageManager.getStorageType();
       const storageService = await StorageHelper.getStorageService();
 
       const available = await storageService.isAvailable();
 
       res.json({
         available,
-        storageType: isS3 ? 's3' : 'local',
+        storageType: storageType || 'unknown',
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
       ControllerErrorUtil.handleError(error, res, 'getting status');
     }
   }
-
-  /**
-   * Express handler для получения статуса хранилища
-   */
-  static getStatus = ((res: Response) => {
-    return FileController.getStatusInternal(res);
-  }) as unknown as (req: AuthenticatedRequest, res: Response) => Promise<void>;
 }

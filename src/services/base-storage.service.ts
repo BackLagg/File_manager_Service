@@ -15,8 +15,11 @@ export abstract class BaseStorageService implements IStorageService {
    * Извлекает и валидирует относительный путь
    */
   protected extractAndValidatePath(filePath: string): string | null {
+    if (!PathUtil.isValidPath(filePath)) {
+      return null;
+    }
     const relativePath = PathUtil.extractRelativePath(filePath);
-    if (!PathUtil.isValidPath(relativePath)) {
+    if (!relativePath || relativePath.length === 0) {
       return null;
     }
     return relativePath;
@@ -77,7 +80,7 @@ export abstract class BaseStorageService implements IStorageService {
     source: Buffer | string,
     filename: string,
     folder: string,
-    mimetype: string,
+    mimetype?: string,
   ): Promise<import('./storage.interface').FileUploadResult>;
 
   abstract deleteFile(path: string): Promise<FileDeleteResult>;

@@ -54,6 +54,10 @@ export class PathUtil {
    * Проверяет валидность пути (безопасен ли он)
    */
   static isValidPath(filePath: string): boolean {
+    // Проверяем на path traversal ДО нормализации
+    if (filePath.includes('..')) {
+      return false;
+    }
     const normalized = this.extractRelativePath(filePath);
     return normalized.length > 0 && !normalized.includes('..');
   }

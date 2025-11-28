@@ -1,50 +1,56 @@
 import { IStorageService } from './storage.interface';
-import { S3StorageService } from './s3-storage.service';
-import { LocalStorageService } from './local-storage.service';
-import { config } from '../config';
 import { getLogger } from './logger.service';
+import { getStorageRegistry } from './storage-registry.service';
 
 export class StorageManagerService {
   private storageService: IStorageService | null = null;
-  private isS3Available: boolean = false;
+  private currentStorageType: string | null = null;
   private initializationPromise: Promise<void> | null = null;
 
   constructor() {
-    // Инициализация будет выполнена асинхронно
     this.initializationPromise = this.initializeStorage();
   }
 
   private async initializeStorage(): Promise<void> {
     const logger = getLogger();
-    // Инициализируем сервисы
-    const s3Service = new S3StorageService();
-    const localService = new LocalStorageService();
+    const registry = getStorageRegistry();
+    const providers = registry.getAvailableProviders();
 
-    if (config.s3.enabled) {
+    if (providers.length === 0) {
+      throw new Error('No storage providers available');
+    }
+
+    // Пробуем хранилища в порядке приоритета
+    for (const provider of providers) {
       try {
-        const available = await s3Service.isAvailable();
+        const service = provider.create();
+        const available = await service.isAvailable();
+
         if (available) {
-          this.storageService = s3Service;
-          this.isS3Available = true;
-          logger.info('S3 storage is available and will be used', {
-            bucket: config.s3.bucketName,
-            region: config.s3.region,
+          this.storageService = service;
+          this.currentStorageType = provider.name;
+          logger.info(`Storage provider "${provider.name}" is available and will be used`, {
+            provider: provider.name,
+            priority: provider.priority,
           });
           return;
+        } else {
+          logger.debug(`Storage provider "${provider.name}" is not available, trying next`, {
+            provider: provider.name,
+          });
         }
       } catch (error) {
-        logger.warn('S3 is not available, falling back to local storage', {
+        logger.warn(`Error checking storage provider "${provider.name}"`, {
+          provider: provider.name,
           error: error instanceof Error ? error.message : String(error),
         });
       }
     }
 
-    // Фолбэк на локальное хранилище
-    this.storageService = localService;
-    this.isS3Available = false;
-    logger.info('Using local storage service', {
-      path: config.storage.path,
-    });
+    // Если ни одно хранилище не доступно
+    throw new Error(
+      `No available storage providers. Tried: ${providers.map((p) => p.name).join(', ')}`,
+    );
   }
 
   /**
@@ -65,10 +71,17 @@ export class StorageManagerService {
   }
 
   /**
-   * Проверяет, используется ли S3
+   * Получает тип текущего хранилища
    */
-  isUsingS3(): boolean {
-    return this.isS3Available;
+  getStorageType(): string | null {
+    return this.currentStorageType;
+  }
+
+  /**
+   * Проверяет, используется ли конкретный тип хранилища
+   */
+  isUsingStorageType(type: string): boolean {
+    return this.currentStorageType === type;
   }
 
   /**
@@ -76,7 +89,7 @@ export class StorageManagerService {
    */
   async reinitialize(): Promise<void> {
     this.storageService = null;
-    this.isS3Available = false;
+    this.currentStorageType = null;
     this.initializationPromise = this.initializeStorage();
     await this.initializationPromise;
     this.initializationPromise = null;

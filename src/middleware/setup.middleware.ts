@@ -24,9 +24,41 @@ function enforceHttpsMiddleware(
 }
 
 /**
+ * Middleware для защиты от path traversal атак
+ * Перехватывает запросы, которые после нормализации стали системными путями
+ */
+function pathTraversalProtection(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+): void {
+  const originalUrl = req.originalUrl || req.url || '';
+  if (originalUrl.includes('../') || originalUrl.includes('..\\')) {
+    res.status(400).json({ error: 'Invalid file path' });
+    return;
+  }
+
+  const normalizedPath = req.path.startsWith('/') ? req.path.substring(1) : req.path;
+  if (
+    normalizedPath.startsWith('etc/') ||
+    normalizedPath.startsWith('var/') ||
+    normalizedPath.startsWith('usr/') ||
+    normalizedPath.startsWith('root/') ||
+    normalizedPath.startsWith('home/') ||
+    normalizedPath.startsWith('windows/')
+  ) {
+    res.status(400).json({ error: 'Invalid file path' });
+    return;
+  }
+
+  next();
+}
+
+/**
  * Настраивает базовые middleware для приложения
  */
 export function setupMiddleware(app: Express): void {
+  app.use(pathTraversalProtection);
   app.use(enforceHttpsMiddleware);
   app.use(compression());
 

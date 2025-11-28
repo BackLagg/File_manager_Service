@@ -1,6 +1,7 @@
 import { config, validateConfig } from './config';
 import { getLogger } from './services/logger.service';
 import { StorageInitializerService } from './services/storage-initializer.service';
+import { registerDefaultStorageProviders } from './services/storage-providers';
 import { createApp } from './app';
 import { Express } from 'express';
 
@@ -37,6 +38,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
 async function startServer(): Promise<void> {
   try {
     validateConfig();
+
+    // Регистрируем встроенные провайдеры хранилищ
+    registerDefaultStorageProviders();
+
     await StorageInitializerService.initialize();
 
     const app = createApp();
